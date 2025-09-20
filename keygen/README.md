@@ -1,12 +1,13 @@
-# Keygen: A ChaCha20 Key Generator
+# Keygen: A Secure ChaCha20 Key Generator
 
 ## Overview
-`keygen` is a command-line tool written in [Zig](https://ziglang.org/) that generates a binary key file (`key.key`) of a specified size using the ChaCha20 stream cipher. The key is derived deterministically from a user-provided password using SHA-256 hashing, making it suitable for reproducible key generation in non-production environments.
+`keygen` is a command-line tool written in [Zig](https://ziglang.org/) that generates a binary key file (`key.key`) of a specified size using the ChaCha20 stream cipher. The key and nonce are derived deterministically from a user-provided password using Argon2id, a memory-hard password hashing function, ensuring stronger resistance to brute-force attacks compared to simple hashing.
 
 ## Requirements
 - **Zig Compiler**: Version 0.15.1 (stable) for Windows x86_64. Download from [ziglang.org](https://ziglang.org/download/0.15.1/zig-x86_64-windows-0.15.1.zip).
 - **Windows**: Tested on Windows 10/11 (x86_64 architecture).
 - **Disk Space**: Enough to store the output file (up to 20GB).
+- **Memory**: Argon2 uses 64MiB of memory per key derivation (adjustable in code).
 
 ## Installation
 1. Download and extract `zig-x86_64-windows-0.15.1.zip` to a directory, e.g., `C:\Users\<YourUsername>\OneDrive\Desktop\zig`.
@@ -41,15 +42,18 @@ Creates a 1024-byte `key.key` file in the current directory.
 ## How It Works
 1. **Input Parsing**: Reads `<size_bytes>` and `<password>` from command-line arguments.
 2. **Key Derivation**:
-   - Computes SHA-256 of the password to derive a 32-byte key.
-   - Computes SHA-256 of the password + "keygen-nonce" to derive a 12-byte nonce.
+   - Generates deterministic 16-byte salts for key and nonce using SHA-256 (password for key, password + "keygen-nonce" for nonce).
+   - Derives a 32-byte key and 12-byte nonce using Argon2id with secure parameters (4 iterations, 64MiB memory, 1 thread).
 3. **Key Generation**: Uses ChaCha20IETF to generate a keystream of the specified size, written to `key.key` in 64KiB chunks.
 4. **Output**: Creates or overwrites `key.key` with the binary keystream.
 
 ## Security Notes
-- **SHA-256 Limitation**: The tool uses SHA-256 for key derivation, which is fast but vulnerable to brute-force attacks. For production use, consider replacing with Argon2 (`std.crypto.pwhash.argon2`) for stronger password-based key derivation.
-- **Deterministic Output**: The same password and size produce the same `key.key`, useful for testing but not secure for cryptographic keys without a random salt.
-- **Recommendations**: For secure applications, use random salts and Argon2, and store salts alongside the key file.
+- **Argon2id**: Uses Argon2id (memory-hard, resistant to GPU/brute-force attacks) for key and nonce derivation, making it suitable for cryptographic applications.
+- **Deterministic Salts**: Salts are derived from the password for reproducibility (same password yields same `key.key`). For production, use random salts and store them with the output.
+- **ChaCha20**: A secure stream cipher, safe for generating pseudorandom key material.
+- **Recommendations**:
+  - For production, use random salts (e.g., via `std.crypto.random.bytes`) and store them in a separate file or prepend to `key.key`.
+  - Adjust Argon2 parameters (e.g., increase memory to 256MiB) for higher security, balancing performance.
 
 ## Building and Testing
 1. Compile as above.
@@ -68,15 +72,15 @@ Creates a 1024-byte `key.key` file in the current directory.
    ```
 
 ## Limitations
-- **Performance**: Direct file writes (no buffering) may be slower for very large files (e.g., 20GB). Consider adding buffering for optimization.
+- **Performance**: Direct file writes (no buffering) may be slower for very large files (e.g., 20GB). Argon2’s 64MiB memory usage may be intensive on low-memory systems.
 - **Platform**: Tested on Windows x86_64. For other platforms, use appropriate Zig builds (e.g., Linux, macOS).
-- **Security**: Not suitable for production cryptographic use without upgrading to Argon2.
+- **Determinism**: Deterministic salts are convenient for testing but less secure for production without random salts.
 
 ## Future Improvements
-- Switch to `std.crypto.pwhash.argon2` for secure key derivation.
-- Add random salt generation and storage for non-deterministic keys.
-- Implement buffering for file writes to improve performance.
-- Add output file name as a command-line argument.
+- Add random salt generation and storage for enhanced security.
+- Implement buffered file writes for better performance on large files.
+- Allow custom output file names via command-line arguments.
+- Support configurable Argon2 parameters (iterations, memory) via arguments.
 
 ## License
 Public domain. Use and modify freely.
